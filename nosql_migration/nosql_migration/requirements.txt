@@ -1,0 +1,4 @@
+pandas
+openpyxl
+neo4j
+pg8000

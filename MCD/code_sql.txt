@@ -1,0 +1,52 @@
+CREATE TABLE Région(
+   id_region INT,
+   nom_region VARCHAR(100),
+   PRIMARY KEY(id_region)
+);
+
+CREATE TABLE Departement(
+   code_dept VARCHAR(3),
+   nom_dept VARCHAR(100),
+   id_region INT NOT NULL,
+   PRIMARY KEY(code_dept),
+   FOREIGN KEY(id_region) REFERENCES Région(id_region)
+);
+
+CREATE TABLE service(
+   code_service VARCHAR(50),
+   nom_service VARCHAR(100),
+   code_dept VARCHAR(3) NOT NULL,
+   PRIMARY KEY(code_service),
+   FOREIGN KEY(code_dept) REFERENCES Departement(code_dept)
+);
+
+CREATE TABLE infraction(
+   code_index INT,
+   libelle VARCHAR(200),
+   PRIMARY KEY(code_index)
+);
+
+CREATE TABLE perimetre(
+   id_perimetre INT,
+   nom_perimetre VARCHAR(100),
+   PRIMARY KEY(id_perimetre)
+);
+
+CREATE TABLE enregistrement(
+   id_enregistrement INT,
+   annee INT,
+   nb_faits INT,
+   code_index INT NOT NULL,
+   code_service VARCHAR(50) NOT NULL,
+   PRIMARY KEY(id_enregistrement),
+   FOREIGN KEY(code_index) REFERENCES infraction(code_index),
+   FOREIGN KEY(code_service) REFERENCES service(code_service)
+);
+
+CREATE TABLE appartient(
+   code_service VARCHAR(50),
+   id_perimetre INT,
+   PRIMARY KEY(code_service, id_perimetre),
+   FOREIGN KEY(code_service) REFERENCES service(code_service),
+   FOREIGN KEY(id_perimetre) REFERENCES perimetre(id_perimetre)
+);

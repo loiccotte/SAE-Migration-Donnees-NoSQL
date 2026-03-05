@@ -1,0 +1,20 @@
+# Environnement
+.env
+!.env.example
+__pycache__/
+*.pyc
+
+# Fichiers generes
+rapport_final.pdf
+rapport_final.html
+convert_to_pdf.py
+
+# Fichiers trop volumineux ou generes
+projet/base_crimes_clean_v3.csv
+projet/crimes_db_relational.db
+projet/import_graph.cypher
+
+# OS
+.DS_Store
+Thumbs.db
+*.tmp

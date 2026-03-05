@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+
+  postgres:
+    image: postgres:17
+    container_name: postgres-crimes
+    env_file: .env
+    environment:
+      POSTGRES_USER: ${PG_USER}
+      POSTGRES_PASSWORD: ${PG_PASSWORD}
+      POSTGRES_DB: ${PG_DB}
+    ports:
+      - "5433:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./dump.sql:/dumps/dump.sql:ro
+      - ./init-db.sh:/docker-entrypoint-initdb.d/01-init-db.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PG_USER} -d ${PG_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  neo4j:
+    image: neo4j:5
+    container_name: neo4j-crimes
+    env_file: .env
+    environment:
+      NEO4J_AUTH: ${NEO_USER}/${NEO_PASSWORD}
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    volumes:
+      - neo4j_data:/data
+      - ./neo4j.dump:/dumps/neo4j.dump:ro
+      - ./init-neo4j.sh:/init-neo4j.sh:ro
+    entrypoint: ["/bin/bash", "/init-neo4j.sh"]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:7474"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  migration:
+    profiles: [migrate]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: migration-crimes
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+
+volumes:
+  pg_data:
+  neo4j_data:

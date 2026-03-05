@@ -1,0 +1,66 @@
+Cahier des Charges
+Commanditaire :
+
+Ministère de l’Intérieur
+Direction Générale des Données et de la Sécurité Numérique
+
+Titre du Projet :
+Migration d'une Base de Données Relationnelle vers un Modèle Graphe pour l’Analyse des Crimes et Délits (2012-2021)
+
+1. Contexte Général
+Dans le cadre de la modernisation des outils d’analyse des données relatives aux crimes et délits enregistrés par la Police et la Gendarmerie nationale, ce projet vise à optimiser l’exploitation des données. Les bases de données relationnelles, bien que performantes, présentent des limites pour gérer des volumes importants ou effectuer des analyses complexes. Ainsi, l’utilisation de solutions NoSQL, et plus précisément d’une base orientée graphe, est envisagée pour répondre aux besoins opérationnels et stratégiques du Ministère.
+
+Le présent cahier des charges définit les objectifs, les phases, et les livrables attendus pour mener à bien cette migration.
+
+2. Objectifs du Projet
+Optimiser le rendu de l’analyse des données relatives aux crimes et délits enregistrés entre 2012 et 2022.
+Proposer un modèle graphe qui facilite les analyses avancées (ex. : relations entre départements et types de crimes ...).
+Enrichir les données avec des données public avec d'autres sources de données (ex: adjacences des communes françaises ...).
+Assurer une migration efficace des données depuis un modèle relationnel existant vers un environnement Neo4j.
+Documenter les étapes clés et fournir des outils exploitables pour des analyses futures.
+3. Description des Travaux
+Phase 1 : Analyse des Données Sources et Modélisation Relationnel
+Données sources : Fichier Excel contenant les statistiques des crimes et délits par année (2012-2022) pour la Police nationale (PN) et la Gendarmerie nationale (GN).
+
+Travaux attendus :
+
+Étude des données pour identifier les relations et les entités clés.
+Conception d’un modèle conceptuel (MCD) et d’un modèle logique relationnel.
+Mise en œuvre technique : création d’une base relationnelle sur un SGBD de votre choix puis et alimentation de cette dernière depuis le fichier fourni.
+Phase 2 : Analyse des Limites du modèle relationnel
+Analyse des limites du modèle relationnel (performances, lisibilité, requêtes complexes).
+Proposition d’un modèle graphe :
+Définition des nœuds (ex. : départements, régions, brigades ..).
+Définition des relations.
+Phase 3 : Migration des Données vers un Modèle Graphe
+Développement de scripts pour transformer les données du modèle relationnel vers le modèle graphe.
+Outil cible : Neo4j avec version du logiciel stable suivante : neo4j-1.5.9
+Justification des choix de transformation et des relations créées.
+Phase 4 : Validation et Exploitation de la Solution Graphe
+Vérification de la cohérence des données migrées.
+Tests de la justesse et l'exactitude des requêtes métiers :
+Identifier les types de crimes les plus fréquents par département.
+Analyser les connexions entre brigades et départements.
+....
+Comparaison des performances entre les bases relationnelles et graphes. (Bonus)
+Phase 5 : Rédaction et Présentation du Rapport Final
+Documentation complète des travaux réalisés.
+Présentation synthétique des résultats et des recommandations.
+Les différentes méthode de migrations qui existent
+Prévoir une section sur l'ajout de nouvelles données pour que ce soit pour la base de données orienté graphe ou base de données relationnelle.
+4. Livrables Attendues
+Base Relationnelle :
+
+Modèle conceptuel et logique.
+Script SQL pour la création et l’alimentation.
+Base Graphe :
+
+Schéma des nœuds et relations.
+Scripts de migration (Python ou autre).
+Rapport Final :
+
+Documentation complète (analyse, conception, migration, validation).
+Comparaison des approches relationnelle et graphe.
+Exemples de requêtes avec résultats.
+Vidéo de démonstration du résultat de la migration
+La remise est prévu avant le 06 mars 2026 à 23h59
