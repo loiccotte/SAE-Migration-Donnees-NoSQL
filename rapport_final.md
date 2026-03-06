@@ -2,11 +2,15 @@
 
 ---
 
-**Commanditaire** : Ministère de l'Intérieur — Direction Générale des Données et de la Sécurité Numérique
+**Groupe 4 VCOD TP 1** : CHABANEL Tristan, COTTE Loïc, DESVALCY Andrew, MINUSKER Okan
 
 **Formation** : BUT Science des Données — SAE NoSQL
 
 **Date** : Mars 2026
+
+**Dépôt GitHub** : https://github.com/loiccotte/SAE-Migration-Donnees-NoSQL
+
+**Vidéo de présentation** : https://www.youtube.com/watch?v=xdYHTb8rBQ0
 
 ---
 
