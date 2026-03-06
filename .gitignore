@@ -4,14 +4,20 @@
 __pycache__/
 *.pyc
 
-# Fichiers generes
+# Fichiers générés
 rapport_final.html
 convert_to_pdf.py
 
-# Fichiers trop volumineux ou generes
+# Fichiers trop volumineux ou générés
 projet/base_crimes_clean_v3.csv
 projet/crimes_db_relational.db
 projet/import_graph.cypher
+
+# Vidéo et présentation
+*.mp4
+*.pptx
+SCRIPT_VIDEO.md
+generer_slides.py
 
 # OS
 .DS_Store

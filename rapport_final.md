@@ -413,7 +413,6 @@ RETURN type(r) AS relation, COUNT(r) AS nombre
 ORDER BY nombre DESC
 ```
 
-*Résultat tabulaire (pas de vue graphe) — voir screen.md pour la capture.*
 
 #### Requête 2 -- Visualisation du modèle complet
 
@@ -427,7 +426,6 @@ RETURN s, d, r, p, e, i
 LIMIT 5
 ```
 
-![Visualisation du modèle complet](nosql_migration/requetes_neo4j/requete_02_graph.svg)
 
 #### Requête 3 -- Top 10 des infractions les plus fréquentes
 
@@ -440,7 +438,6 @@ ORDER BY total_faits DESC
 LIMIT 10
 ```
 
-*Résultat tabulaire (pas de vue graphe) — voir screen.md pour la capture.*
 
 #### Requête 4 -- Top 3 des crimes par département
 
@@ -456,7 +453,6 @@ UNWIND top3 AS t
 RETURN departement, t.infraction AS infraction, t.total AS total_faits
 ```
 
-*Résultat tabulaire (pas de vue graphe) — voir screen.md pour la capture.*
 
 #### Requête 5 -- Hiérarchie régions / départements
 
@@ -467,7 +463,6 @@ MATCH (d:Departement)-[:APPARTIENT_A]->(r:Region)
 RETURN d, r
 ```
 
-![Hiérarchie régions / départements](nosql_migration/requetes_neo4j/requete_05_graph.svg)
 
 #### Requête 6 -- Services d'une région (Île-de-France)
 
@@ -480,7 +475,6 @@ RETURN s, d, r
 LIMIT 50
 ```
 
-![Services d'Île-de-France](nosql_migration/requetes_neo4j/requete_06_graph.svg)
 
 #### Requête 7 -- Répartition Police / Gendarmerie
 
@@ -493,7 +487,6 @@ WHERE d.nom_dept = 'Paris'
 RETURN s, d, p
 ```
 
-![Répartition PN/GN à Paris](nosql_migration/requetes_neo4j/requete_07_graph.svg)
 
 #### Requête 8 -- Adjacences d'un département
 
@@ -504,7 +497,6 @@ MATCH (d:Departement {code_dept: '75'})-[:EST_ADJACENT]-(voisin:Departement)
 RETURN d, voisin
 ```
 
-![Adjacences de Paris](nosql_migration/requetes_neo4j/requete_08_graph.svg)
 
 #### Requête 9 -- Carte complète des adjacences
 
@@ -515,7 +507,6 @@ MATCH (a:Departement)-[:EST_ADJACENT]->(b:Departement)
 RETURN a, b
 ```
 
-![Carte complète des adjacences](nosql_migration/requetes_neo4j/requete_09_graph.svg)
 
 #### Requête 10 -- Plus court chemin entre deux départements
 
@@ -528,7 +519,6 @@ MATCH (a:Departement {code_dept: '75'}),
 RETURN path
 ```
 
-![Plus court chemin Paris-Marseille](nosql_migration/requetes_neo4j/requete_10_graph.svg)
 
 #### Requête 11 -- Détail des enregistrements d'un service
 
@@ -541,7 +531,6 @@ RETURN s, e, i
 LIMIT 20
 ```
 
-![Détail des enregistrements d'un service](nosql_migration/requetes_neo4j/requete_11_graph.svg)
 
 ### 5.3 Comparaison SQL vs Cypher
 
