@@ -1,10 +1,10 @@
-# Migration d'une base relationnelle vers un modele graphe — Crimes et delits (2012-2022)
+# Migration d'une base relationnelle vers un modèle graphe — Crimes et délits (2012-2022)
 
 ---
 
-**Commanditaire** : Ministere de l'Interieur — Direction Generale des Donnees et de la Securite Numerique
+**Commanditaire** : Ministère de l'Intérieur — Direction Générale des Données et de la Sécurité Numérique
 
-**Formation** : BUT Science des Donnees — SAE NoSQL
+**Formation** : BUT Science des Données — SAE NoSQL
 
 **Date** : Mars 2026
 
@@ -13,12 +13,12 @@
 ## Sommaire
 
 1. Introduction
-2. Phase 1 — Analyse des donnees et modelisation relationnelle
+2. Phase 1 — Analyse des données et modélisation relationnelle
 3. Phase 2 — Limites du relationnel et passage au graphe
-4. Phase 3 — Migration des donnees
+4. Phase 3 — Migration des données
 5. Phase 4 — Validation et exploitation
-6. Ajout de nouvelles donnees
-7. Difficultes rencontrees
+6. Ajout de nouvelles données
+7. Difficultés rencontrées
 8. Conclusion
 
 ---
@@ -27,29 +27,29 @@
 
 ### 1.1 Contexte
 
-Chaque annee, le Ministere de l'Interieur collecte les statistiques de criminalite sur tout le territoire francais. Les donnees couvrent la periode 2012-2022 et proviennent de deux sources : la Police Nationale (PN) en zone urbaine, et la Gendarmerie Nationale (GN) en zone rurale et periurbaine. Au total, on parle de plus d'un million d'enregistrements repartis sur 101 departements et 107 types d'infractions.
+Chaque année, le Ministère de l'Intérieur collecte les statistiques de criminalité sur tout le territoire français. Les données couvrent la période 2012-2022 et proviennent de deux sources : la Police Nationale (PN) en zone urbaine, et la Gendarmerie Nationale (GN) en zone rurale et périurbaine. Au total, on parle de plus d'un million d'enregistrements répartis sur 101 départements et 107 types d'infractions.
 
-A l'origine, tout est stocke dans un gros fichier Excel avec un format matriciel. Ca se lit bien a l'oeil, mais c'est penible a exploiter par programme.
+À l'origine, tout est stocké dans un gros fichier Excel avec un format matriciel. Ça se lit bien à l'œil, mais c'est pénible à exploiter par programme.
 
-### 1.2 Problematique
+### 1.2 Problématique
 
-Le Ministere veut pouvoir repondre a des questions du type : quels departements voisins ont des pics de criminalite similaires ? Quels services couvrent quel territoire ? Ce genre de questions tourne autour des relations entre les entites. En SQL classique, ca implique beaucoup de jointures imbriquees et des requetes recursives des qu'on veut suivre un chemin dans les donnees. D'ou l'idee de tester un modele graphe.
+Le Ministère veut pouvoir répondre à des questions du type : quels départements voisins ont des pics de criminalité similaires ? Quels services couvrent quel territoire ? Ce genre de questions tourne autour des relations entre les entités. En SQL classique, ça implique beaucoup de jointures imbriquées et des requêtes récursives dès qu'on veut suivre un chemin dans les données. D'où l'idée de tester un modèle graphe.
 
 ### 1.3 Objectifs
 
-1. Structurer les donnees Excel en base relationnelle PostgreSQL.
-2. Montrer ou le relationnel coince face a certaines requetes.
-3. Concevoir un modele graphe Neo4j adapte.
-4. Migrer toutes les donnees vers Neo4j.
-5. Verifier que rien n'a ete perdu et montrer ce que le graphe apporte.
+1. Structurer les données Excel en base relationnelle PostgreSQL.
+2. Montrer où le relationnel coince face à certaines requêtes.
+3. Concevoir un modèle graphe Neo4j adapté.
+4. Migrer toutes les données vers Neo4j.
+5. Vérifier que rien n'a été perdu et montrer ce que le graphe apporte.
 
 ---
 
-## 2. Phase 1 — Analyse des donnees et modelisation relationnelle
+## 2. Phase 1 — Analyse des données et modélisation relationnelle
 
 ### 2.1 Le fichier Excel source
 
-Le fichier contient 20 onglets : un par croisement service (PN/GN) x annee (2012 a 2022).
+Le fichier contient 20 onglets : un par croisement service (PN/GN) x année (2012 à 2022).
 
 Chaque onglet est au format matriciel :
 
@@ -58,13 +58,13 @@ Chaque onglet est au format matriciel :
 | Infraction 1 | 42 | 18 | 7 | ... |
 | Infraction 2 | 105 | 33 | 22 | ... |
 
-Les lignes correspondent aux 107 types d'infractions, les colonnes aux zones geographiques (commissariats, brigades), et les cellules au nombre de faits constates.
+Les lignes correspondent aux 107 types d'infractions, les colonnes aux zones géographiques (commissariats, brigades), et les cellules au nombre de faits constatés.
 
-On a rencontre plusieurs problemes avec ce fichier :
+On a rencontré plusieurs problèmes avec ce fichier :
 
-1. Il y a 3 lignes d'en-tete par onglet (departement, nom de zone, code service) au lieu d'une seule. Pandas ne gere pas ca tout seul.
-2. Les codes departement sont alphanumeriques : la Corse utilise `2A` et `2B`, donc on ne peut pas stocker ca en entier.
-3. Il faut gerer les doublons potentiels entre onglets.
+1. Il y a 3 lignes d'en-tête par onglet (département, nom de zone, code service) au lieu d'une seule. Pandas ne gère pas ça tout seul.
+2. Les codes département sont alphanumériques : la Corse utilise `2A` et `2B`, donc on ne peut pas stocker ça en entier.
+3. Il faut gérer les doublons potentiels entre onglets.
 
 ### 2.2 Processus ETL
 
@@ -75,7 +75,7 @@ Fichier Excel (20 onglets, format pivot)
         |
         v
 Script ETL Python (Pandas)
-   1. Lecture des 3 lignes d'en-tete
+   1. Lecture des 3 lignes d'en-tête
    2. Unpivot (melt) du format matriciel
    3. Nettoyage et enrichissement
         |
@@ -83,68 +83,68 @@ Script ETL Python (Pandas)
 CSV vertical (1 ligne = 1 observation)
 ```
 
-L'operation qui fait tout le travail, c'est le `melt` (unpivot). On passe d'un format large a un format long :
+L'opération qui fait tout le travail, c'est le `melt` (unpivot). On passe d'un format large à un format long :
 
 Avant (format matriciel) :
 
-| code_index | libelle | Zone_A | Zone_B |
+| code_index | libellé | Zone_A | Zone_B |
 |---|---|---|---|
 | 01 | Vol simple | 42 | 18 |
 
-Apres (format vertical) :
+Après (format vertical) :
 
-| code_index | libelle | zone | faits |
+| code_index | libellé | zone | faits |
 |---|---|---|---|
 | 01 | Vol simple | Zone_A | 42 |
 | 01 | Vol simple | Zone_B | 18 |
 
-Chaque cellule du tableau original devient une ligne. On passe de "1 ligne = 1 infraction pour N zones" a "1 ligne = 1 observation". Pandas est pratique ici : il lit les fichiers Excel multi-onglets nativement et la methode `melt()` fait exactement cette operation d'unpivot.
+Chaque cellule du tableau original devient une ligne. On passe de "1 ligne = 1 infraction pour N zones" à "1 ligne = 1 observation". Pandas est pratique ici : il lit les fichiers Excel multi-onglets nativement et la méthode `melt()` fait exactement cette opération d'unpivot.
 
-### 2.3 Modele Conceptuel (MCD)
+### 2.3 Modèle Conceptuel (MCD)
 
-On a opte pour un schema en etoile centre sur la table de faits `enregistrement`.
+On a opté pour un schéma en étoile centré sur la table de faits `enregistrement`.
 
-| Entite | Role |
+| Entité | Rôle |
 |---|---|
-| Region | Decoupage administratif de niveau 1 (18 regions) |
-| Departement | Decoupage de niveau 2 (101 departements) |
-| Service | Unite operationnelle, commissariat ou brigade (1 239) |
-| Perimetre | Type de service : PN ou GN (2) |
-| Infraction | Type de crime/delit selon la nomenclature officielle (107) |
-| Enregistrement | Fait statistique : nombre de faits constates (1 120 775) |
+| Région | Découpage administratif de niveau 1 (18 régions) |
+| Département | Découpage de niveau 2 (101 départements) |
+| Service | Unité opérationnelle, commissariat ou brigade (1 239) |
+| Périmètre | Type de service : PN ou GN (2) |
+| Infraction | Type de crime/délit selon la nomenclature officielle (107) |
+| Enregistrement | Fait statistique : nombre de faits constatés (1 120 775) |
 
-Cardinalites principales :
+Cardinalités principales :
 
-- 1 Region contient 1 a N Departements
-- 1 Departement contient 1 a N Services
-- 1 Service appartient a 1 seul Departement
-- Service et Perimetre sont lies en N-N (via table d'association)
-- 1 Enregistrement correspond a 1 Service + 1 Infraction
+- 1 Région contient 1 à N Départements
+- 1 Département contient 1 à N Services
+- 1 Service appartient à 1 seul Département
+- Service et Périmètre sont liés en N-N (via table d'association)
+- 1 Enregistrement correspond à 1 Service + 1 Infraction
 
-Le schema MCD complet est dans `MCD/MCD_VF.png`.
+Le schéma MCD complet est dans `MCD/MCD_VF.png`.
 
-### 2.4 Modele logique et physique
+### 2.4 Modèle logique et physique
 
-Le schema SQL comprend 7 tables : `region`, `departement`, `service`, `perimetre`, `service_perimetre` (table d'association N-N), `infraction` et `enregistrement`. Le DDL complet est disponible dans le fichier `sql_ddl_postgres.sql` du projet.
+Le schéma SQL comprend 7 tables : `region`, `departement`, `service`, `perimetre`, `service_perimetre` (table d'association N-N), `infraction` et `enregistrement`. Le DDL complet est disponible dans le fichier `sql_ddl_postgres.sql` du projet.
 
 Choix techniques principaux :
 
-- `VARCHAR` partout pour les codes, a cause des codes corses `2A`/`2B` qu'on ne peut pas stocker en entier.
-- `CHECK (nb_faits >= 0)` pour empecher les valeurs negatives.
+- `VARCHAR` partout pour les codes, à cause des codes corses `2A`/`2B` qu'on ne peut pas stocker en entier.
+- `CHECK (nb_faits >= 0)` pour empêcher les valeurs négatives.
 - `UNIQUE (annee, code_service, code_index)` pour garantir un seul enregistrement par triplet.
-- Cles etrangeres entre toutes les tables pour garantir l'integrite referentielle.
+- Clés étrangères entre toutes les tables pour garantir l'intégrité référentielle.
 
 ### 2.5 Alimentation de la base
 
-Le script `load_csvs_to_postgres_pg8000.py` charge 7 fichiers CSV dans PostgreSQL, dans l'ordre impose par les cles etrangeres :
+Le script `load_csvs_to_postgres_pg8000.py` charge 7 fichiers CSV dans PostgreSQL, dans l'ordre imposé par les clés étrangères :
 
 1. `region` puis 2. `departement` puis 3. `service` puis 4. `perimetre` puis 5. `service_perimetre` puis 6. `infraction` puis 7. `enregistrement`
 
-Deux techniques qu'on a utilisees :
+Deux techniques qu'on a utilisées :
 
-- Batching par lots de 5 000 : au lieu d'inserer 1,1 million de lignes une par une (tres lent a cause des allers-retours reseau), on les regroupe par paquets de 5 000.
+- Batching par lots de 5 000 : au lieu d'insérer 1,1 million de lignes une par une (très lent à cause des allers-retours réseau), on les regroupe par paquets de 5 000.
 
-- `ON CONFLICT DO NOTHING` : si on relance le script, les lignes deja presentes sont ignorees au lieu de provoquer des erreurs. Ca rend le chargement idempotent, on peut le relancer autant de fois qu'on veut sans risque.
+- `ON CONFLICT DO NOTHING` : si on relance le script, les lignes déjà présentes sont ignorées au lieu de provoquer des erreurs. Ça rend le chargement idempotent, on peut le relancer autant de fois qu'on veut sans risque.
 
 | Table | Fichier CSV | Lignes |
 |---|---|---|
@@ -160,11 +160,11 @@ Deux techniques qu'on a utilisees :
 
 ## 3. Phase 2 — Limites du relationnel et passage au graphe
 
-### 3.1 Ou le SQL coince
+### 3.1 Où le SQL coince
 
 #### Les jointures s'empilent vite
 
-Pour repondre a "Quels sont les crimes les plus frequents en Ile-de-France ?", il faut traverser Region, Departement, Service, Enregistrement et Infraction. Ca fait 4 jointures :
+Pour répondre à "Quels sont les crimes les plus fréquents en Île-de-France ?", il faut traverser Région, Département, Service, Enregistrement et Infraction. Ça fait 4 jointures :
 
 ```sql
 SELECT i.libelle, SUM(e.nb_faits) AS total
@@ -178,7 +178,7 @@ GROUP BY i.libelle
 ORDER BY total DESC LIMIT 10;
 ```
 
-En Cypher (Neo4j), la meme question se lit beaucoup plus naturellement :
+En Cypher (Neo4j), la même question se lit beaucoup plus naturellement :
 
 ```cypher
 MATCH (s:Service)-[:SE_TROUVE]->(d:Departement)-[:APPARTIENT_A]->(r:Region),
@@ -188,11 +188,11 @@ RETURN i.libelle AS infraction, SUM(e.nb_faits) AS total
 ORDER BY total DESC LIMIT 10
 ```
 
-On "dessine" le chemin qu'on veut parcourir au lieu de specifier les conditions de jointure une par une.
+On "dessine" le chemin qu'on veut parcourir au lieu de spécifier les conditions de jointure une par une.
 
-#### Les requetes recursives pour les chemins
+#### Les requêtes récursives pour les chemins
 
-La question "Quel est le plus court chemin entre Paris et Marseille via les adjacences ?" necessite en SQL une CTE recursive d'une vingtaine de lignes. En Cypher, ca tient en 3 lignes :
+La question "Quel est le plus court chemin entre Paris et Marseille via les adjacences ?" nécessite en SQL une CTE récursive d'une vingtaine de lignes. En Cypher, ça tient en 3 lignes :
 
 ```cypher
 MATCH path = shortestPath(
@@ -201,39 +201,39 @@ MATCH path = shortestPath(
 RETURN path
 ```
 
-#### Resume
+#### Résumé
 
-| Operation | SQL | Cypher |
+| Opération | SQL | Cypher |
 |---|---|---|
-| Traversee hierarchique | N jointures | Pattern chaine |
-| Plus court chemin | CTE recursive (~20 lignes) | `shortestPath` (3 lignes) |
+| Traversée hiérarchique | N jointures | Pattern chaîné |
+| Plus court chemin | CTE récursive (~20 lignes) | `shortestPath` (3 lignes) |
 | Voisins des voisins | Self-JOIN multiples | `*2` dans le pattern |
 
-### 3.2 Pourquoi le graphe colle mieux a ces donnees
+### 3.2 Pourquoi le graphe colle mieux à ces données
 
-Les donnees de criminalite forment un reseau : des services dans des departements, des departements dans des regions, des departements voisins les uns des autres. Les questions metier sont des questions de relations, quels voisins ? quels chemins ? quelle couverture ?
+Les données de criminalité forment un réseau : des services dans des départements, des départements dans des régions, des départements voisins les uns des autres. Les questions métier sont des questions de relations, quels voisins ? quels chemins ? quelle couverture ?
 
-Dans Neo4j, les relations sont des objets a part entiere (avec un type, des proprietes, une direction), pas juste un mecanisme technique comme une cle etrangere. Le modele de donnees et les questions metier parlent le meme langage.
+Dans Neo4j, les relations sont des objets à part entière (avec un type, des propriétés, une direction), pas juste un mécanisme technique comme une clé étrangère. Le modèle de données et les questions métier parlent le même langage.
 
-Neo4j utilise aussi ce qu'on appelle l'index-free adjacency : chaque noeud stocke un pointeur direct vers ses voisins. Traverser une relation est en temps constant, quelle que soit la taille du graphe. En SQL, chaque jointure passe par un index dont le cout depend du volume de donnees.
+Neo4j utilise aussi ce qu'on appelle l'index-free adjacency : chaque nœud stocke un pointeur direct vers ses voisins. Traverser une relation est en temps constant, quelle que soit la taille du graphe. En SQL, chaque jointure passe par un index dont le coût dépend du volume de données.
 
-### 3.3 Conception du modele graphe
+### 3.3 Conception du modèle graphe
 
-#### Regles de transformation
+#### Règles de transformation
 
-On a applique 5 regles pour passer du relationnel au graphe :
+On a appliqué 5 règles pour passer du relationnel au graphe :
 
-| Regle | Relationnel | Graphe |
+| Règle | Relationnel | Graphe |
 |---|---|---|
-| 1 | Table d'entite | Noeud avec proprietes |
-| 2 | Cle etrangere | Relation (la colonne FK disparait du noeud) |
-| 3 | Table d'association pure (N-N) | Relation directe (la table disparait) |
-| 4 | Table d'association avec attributs | Noeud intermediaire + 2 relations |
-| 5 | Auto-reference | Relation entre noeuds du meme label |
+| 1 | Table d'entité | Nœud avec propriétés |
+| 2 | Clé étrangère | Relation (la colonne FK disparaît du nœud) |
+| 3 | Table d'association pure (N-N) | Relation directe (la table disparaît) |
+| 4 | Table d'association avec attributs | Nœud intermédiaire + 2 relations |
+| 5 | Auto-référence | Relation entre nœuds du même label |
 
 #### Exemples concrets
 
-Regle 2 -- La FK devient une relation :
+Règle 2 -- La FK devient une relation :
 
 PostgreSQL `departement` :
 
@@ -248,9 +248,9 @@ Neo4j :
 (:Region {id_region: "REG-11"})
 ```
 
-La colonne `id_region` disparait du noeud Departement. Elle est remplacee par la relation `APPARTIENT_A`.
+La colonne `id_region` disparaît du nœud Département. Elle est remplacée par la relation `APPARTIENT_A`.
 
-Regle 3 -- La table d'association disparait :
+Règle 3 -- La table d'association disparaît :
 
 PostgreSQL `service_perimetre` :
 
@@ -269,16 +269,16 @@ La table `service_perimetre` n'existe plus. Chaque ligne devient une relation di
 
 | Table PostgreSQL | Ce qu'elle devient dans Neo4j |
 |---|---|
-| `region` | Noeud `:Region` |
-| `departement` | Noeud `:Departement` + relation `APPARTIENT_A` vers Region. Colonne `id_region` supprimee. |
-| `service` | Noeud `:Service` + relation `SE_TROUVE` vers Departement. Colonne `code_dept` supprimee. |
-| `perimetre` | Noeud `:Perimetre` |
-| `service_perimetre` | Table supprimee. Devient relation `APPARTIENT` (Service vers Perimetre). |
-| `infraction` | Noeud `:Infraction` |
-| `enregistrement` | Noeud `:Enregistrement` + relations `ENREGISTRE` et `CONCERNE`. Colonnes FK supprimees. |
+| `region` | Nœud `:Region` |
+| `departement` | Nœud `:Departement` + relation `APPARTIENT_A` vers Région. Colonne `id_region` supprimée. |
+| `service` | Nœud `:Service` + relation `SE_TROUVE` vers Département. Colonne `code_dept` supprimée. |
+| `perimetre` | Nœud `:Perimetre` |
+| `service_perimetre` | Table supprimée. Devient relation `APPARTIENT` (Service vers Périmètre). |
+| `infraction` | Nœud `:Infraction` |
+| `enregistrement` | Nœud `:Enregistrement` + relations `ENREGISTRE` et `CONCERNE`. Colonnes FK supprimées. |
 | `adjacence` | Relation `EST_ADJACENT` entre deux `:Departement` |
 
-#### Schema du graphe final
+#### Schéma du graphe final
 
 ```
 (Service)-[:SE_TROUVE]->(Departement)-[:APPARTIENT_A]->(Region)
@@ -287,30 +287,28 @@ La table `service_perimetre` n'existe plus. Chaque ligne devient une relation di
 (Departement)-[:EST_ADJACENT]->(Departement)
 ```
 
-6 labels de noeuds, 6 types de relations.
+6 labels de nœuds, 6 types de relations.
 
 ---
 
-## 4. Phase 3 — Migration des donnees
+## 4. Phase 3 — Migration des données
 
-### 4.1 Choix de la methode de migration
+### 4.1 Choix de la méthode de migration
 
-Plusieurs methodes existent pour migrer des donnees vers Neo4j :
+Plusieurs méthodes existent pour migrer des données vers Neo4j :
 
-| Methode | Controle | Performance | Reproductibilite |
-|---|---|---|---|
-| ETL applicatif (Python) | Total | Bonne | Excellente |
-| LOAD CSV | Faible | Bonne | Moyenne |
-| neo4j-admin import | Aucun | Excellente | Bonne |
-| APOC (JDBC) | Moyen | Bonne | Bonne |
+- **ETL applicatif (Python + driver Bolt)** : un script Python lit PostgreSQL et écrit dans Neo4j via le driver officiel.
+- **LOAD CSV** : commande Cypher native qui lit directement des fichiers CSV.
+- **neo4j-admin import** : outil en ligne de commande pour l'import massif (base vide uniquement).
+- **APOC (JDBC)** : bibliothèque de procédures étendues avec connexion directe vers un SGBDR.
 
-On a choisi l'ETL applicatif en Python car on avait besoin de transformer les donnees pendant la migration (FK vers relations, suppression de la table d'association, conversion de types) et de gerer les erreurs lot par lot sur 1,1 million de lignes.
+On a choisi l'ETL applicatif en Python car on avait besoin de transformer les données pendant la migration (FK vers relations, suppression de la table d'association, conversion de types) et de gérer les erreurs lot par lot sur 1,1 million de lignes.
 
-### 4.2 Le script de migration en detail
+### 4.2 Le script de migration en détail
 
-Le script `migrate_pg_to_neo4j_pg8000.py` fonctionne en etapes sequentielles.
+Le script `migrate_pg_to_neo4j_pg8000.py` fonctionne en étapes séquentielles.
 
-#### Contraintes d'unicite
+#### Contraintes d'unicité
 
 ```python
 s.run("CREATE CONSTRAINT region_pk IF NOT EXISTS FOR (r:Region) REQUIRE r.id_region IS UNIQUE")
@@ -318,25 +316,25 @@ s.run("CREATE CONSTRAINT dept_pk IF NOT EXISTS FOR (d:Departement) REQUIRE d.cod
 # ... idem pour chaque label
 ```
 
-Ces contraintes sont l'equivalent des cles primaires cote graphe. Elles garantissent l'unicite et creent un index pour accelerer les `MERGE`.
+Ces contraintes sont l'équivalent des clés primaires côté graphe. Elles garantissent l'unicité et créent un index pour accélérer les `MERGE`.
 
-#### Migration entite par entite
+#### Migration entité par entité
 
-Pour chaque entite, le script fait : lecture SQL puis ecriture Cypher.
+Pour chaque entité, le script fait : lecture SQL puis écriture Cypher.
 
-Exemple avec les departements :
+Exemple avec les départements :
 
 ```python
 # Lecture depuis PostgreSQL
 fetch("SELECT code_dept, nom_dept, id_region FROM departement")
 
-# Ecriture dans Neo4j
+# Écriture dans Neo4j
 "UNWIND $rows AS row "
 "MERGE (d:Departement {code_dept: row.code_dept}) SET d.nom_dept = row.nom_dept "
 "WITH row, d MATCH (r:Region {id_region: row.id_region}) MERGE (d)-[:APPARTIENT_A]->(r)"
 ```
 
-On lit `id_region` depuis PostgreSQL, mais on ne la stocke pas comme propriete du noeud. Elle sert uniquement a creer la relation `APPARTIENT_A`. C'est la regle 2 en action.
+On lit `id_region` depuis PostgreSQL, mais on ne la stocke pas comme propriété du nœud. Elle sert uniquement à créer la relation `APPARTIENT_A`. C'est la règle 2 en action.
 
 Exemple avec la table d'association :
 
@@ -349,19 +347,19 @@ fetch("SELECT code_service, id_perimetre FROM service_perimetre")
 "MERGE (s)-[:APPARTIENT]->(p)"
 ```
 
-Pas de noeud cree ici : chaque ligne devient directement une relation.
+Pas de nœud créé ici : chaque ligne devient directement une relation.
 
 #### UNWIND + MERGE
 
-UNWIND prend une liste de lignes et les traite une par une dans une seule requete Cypher. Au lieu de 2 000 requetes individuelles (2 000 allers-retours reseau), on envoie 1 seule requete contenant 2 000 lignes.
+UNWIND prend une liste de lignes et les traite une par une dans une seule requête Cypher. Au lieu de 2 000 requêtes individuelles (2 000 allers-retours réseau), on envoie 1 seule requête contenant 2 000 lignes.
 
-MERGE veut dire "cree si ca n'existe pas, sinon ne fais rien". Ca rend la migration idempotente, on peut la relancer sans creer de doublons.
+MERGE veut dire "crée si ça n'existe pas, sinon ne fais rien". Ça rend la migration idempotente, on peut la relancer sans créer de doublons.
 
-Les enregistrements (1,1 million de lignes) sont traites par lots de 1 200 (plus petit que les autres entites car chaque ligne cree 1 noeud + 2 relations).
+Les enregistrements (1,1 million de lignes) sont traités par lots de 1 200 (plus petit que les autres entités car chaque ligne crée 1 nœud + 2 relations).
 
-### 4.4 Enrichissement des donnees
+### 4.3 Enrichissement des données
 
-En plus de la migration, on a ajoute 239 relations d'adjacence entre departements (quels departements partagent une frontiere). Ces donnees viennent de sources publiques.
+En plus de la migration, on a ajouté 239 relations d'adjacence entre départements (quels départements partagent une frontière). Ces données viennent de sources publiques.
 
 ```python
 "UNWIND $rows AS row "
@@ -370,22 +368,22 @@ En plus de la migration, on a ajoute 239 relations d'adjacence entre departement
 "MERGE (da)-[:EST_ADJACENT]->(db)"
 ```
 
-Ca montre un avantage concret du graphe : ajouter un nouveau type de relation ne modifie pas le schema existant. On cree de nouvelles connexions entre des noeuds deja presents, c'est tout.
+Ça montre un avantage concret du graphe : ajouter un nouveau type de relation ne modifie pas le schéma existant. On crée de nouvelles connexions entre des nœuds déjà présents, c'est tout.
 
 ---
 
 ## 5. Phase 4 — Validation et exploitation
 
-### 5.1 Verification de coherence
+### 5.1 Vérification de cohérence
 
-On a fait des comptages exhaustifs pour verifier que chaque noeud et chaque relation dans Neo4j correspond a une ligne dans PostgreSQL.
+On a fait des comptages exhaustifs pour vérifier que chaque nœud et chaque relation dans Neo4j correspond à une ligne dans PostgreSQL.
 
-| Entite / Relation | PostgreSQL | Neo4j | Ecart |
+| Entité / Relation | PostgreSQL | Neo4j | Écart |
 |---|---|---|---|
-| Regions | 18 | 18 | 0 |
-| Departements | 101 | 101 | 0 |
+| Régions | 18 | 18 | 0 |
+| Départements | 101 | 101 | 0 |
 | Services | 1 239 | 1 239 | 0 |
-| Perimetres | 2 | 2 | 0 |
+| Périmètres | 2 | 2 | 0 |
 | Infractions | 107 | 107 | 0 |
 | Enregistrements | 1 120 775 | 1 120 775 | 0 |
 | APPARTIENT_A | 101 | 101 | 0 |
@@ -395,13 +393,13 @@ On a fait des comptages exhaustifs pour verifier que chaque noeud et chaque rela
 | CONCERNE | 1 120 775 | 1 120 775 | 0 |
 | EST_ADJACENT | 239 | 239 | 0 |
 
-Aucune donnee perdue ni dupliquee, 100% de coherence.
+Aucune donnée perdue ni dupliquée, 100% de cohérence.
 
-### 5.2 Requetes metier
+### 5.2 Requêtes métier
 
-#### Requete 1 -- Comptage des noeuds et relations
+#### Requête 1 -- Comptage des nœuds et relations
 
-**Utilite** : Verifier qu'aucune donnee n'a ete perdue apres migration. Le Ministere doit certifier que les statistiques publiees sont completes ; cette requete sert de test de non-regression.
+**Utilité** : Vérifier qu'aucune donnée n'a été perdue après migration. Le Ministère doit certifier que les statistiques publiées sont complètes ; cette requête sert de test de non-régression.
 
 ```cypher
 MATCH (n)
@@ -415,11 +413,11 @@ RETURN type(r) AS relation, COUNT(r) AS nombre
 ORDER BY nombre DESC
 ```
 
-*Resultat tabulaire (pas de vue graphe) — voir screen.md pour la capture.*
+*Résultat tabulaire (pas de vue graphe) — voir screen.md pour la capture.*
 
-#### Requete 2 -- Visualisation du modele complet
+#### Requête 2 -- Visualisation du modèle complet
 
-**Utilite** : Valider visuellement que le schema graphe est conforme a la conception. Permet aux analystes de verifier que le modele correspond au domaine metier (services, departements, infractions) et de reperer une relation manquante ou mal orientee.
+**Utilité** : Valider visuellement que le schéma graphe est conforme à la conception. Permet aux analystes de vérifier que le modèle correspond au domaine métier (services, départements, infractions) et de repérer une relation manquante ou mal orientée.
 
 ```cypher
 MATCH (s:Service)-[:SE_TROUVE]->(d:Departement)-[:APPARTIENT_A]->(r:Region),
@@ -429,11 +427,11 @@ RETURN s, d, r, p, e, i
 LIMIT 5
 ```
 
-![Visualisation du modele complet](nosql_migration/requetes_neo4j/requete_02_graph.svg)
+![Visualisation du modèle complet](nosql_migration/requetes_neo4j/requete_02_graph.svg)
 
-#### Requete 3 -- Top 10 des infractions les plus frequentes
+#### Requête 3 -- Top 10 des infractions les plus fréquentes
 
-**Utilite** : Produire le classement national des infractions pour le bilan annuel de la delinquance. Oriente les politiques de prevention : si les vols sans violence dominent, cela justifie des campagnes ciblees plutot que des renforts d'effectifs.
+**Utilité** : Produire le classement national des infractions pour le bilan annuel de la délinquance. Oriente les politiques de prévention : si les vols sans violence dominent, cela justifie des campagnes ciblées plutôt que des renforts d'effectifs.
 
 ```cypher
 MATCH (e:Enregistrement)-[:CONCERNE]->(i:Infraction)
@@ -442,11 +440,11 @@ ORDER BY total_faits DESC
 LIMIT 10
 ```
 
-*Resultat tabulaire (pas de vue graphe) — voir screen.md pour la capture.*
+*Résultat tabulaire (pas de vue graphe) — voir screen.md pour la capture.*
 
-#### Requete 4 -- Top 3 des crimes par departement
+#### Requête 4 -- Top 3 des crimes par département
 
-**Utilite** : Les prefets utilisent ce classement pour rediger les plans departementaux de prevention de la delinquance (PDPD). Les infractions dominantes different fortement entre un departement urbain et rural, ce qui conduit a des strategies differentes.
+**Utilité** : Les préfets utilisent ce classement pour rédiger les plans départementaux de prévention de la délinquance (PDPD). Les infractions dominantes diffèrent fortement entre un département urbain et rural, ce qui conduit à des stratégies différentes.
 
 ```cypher
 MATCH (s:Service)-[:SE_TROUVE]->(d:Departement),
@@ -458,22 +456,22 @@ UNWIND top3 AS t
 RETURN departement, t.infraction AS infraction, t.total AS total_faits
 ```
 
-*Resultat tabulaire (pas de vue graphe) — voir screen.md pour la capture.*
+*Résultat tabulaire (pas de vue graphe) — voir screen.md pour la capture.*
 
-#### Requete 5 -- Hierarchie regions / departements
+#### Requête 5 -- Hiérarchie régions / départements
 
-**Utilite** : Valider le rattachement de chaque departement a sa region, notamment apres la reforme territoriale de 2016. Sert de support pour les reunions inter-regionales de securite.
+**Utilité** : Valider le rattachement de chaque département à sa région, notamment après la réforme territoriale de 2016. Sert de support pour les réunions inter-régionales de sécurité.
 
 ```cypher
 MATCH (d:Departement)-[:APPARTIENT_A]->(r:Region)
 RETURN d, r
 ```
 
-![Hierarchie regions / departements](nosql_migration/requetes_neo4j/requete_05_graph.svg)
+![Hiérarchie régions / départements](nosql_migration/requetes_neo4j/requete_05_graph.svg)
 
-#### Requete 6 -- Services d'une region (Ile-de-France)
+#### Requête 6 -- Services d'une région (Île-de-France)
 
-**Utilite** : L'Ile-de-France concentre 20% de la population et une part importante de la criminalite. Cette vue permet d'evaluer la couverture territoriale et de planifier les renforts inter-departementaux lors d'evenements majeurs.
+**Utilité** : L'Île-de-France concentre 20% de la population et une part importante de la criminalité. Cette vue permet d'évaluer la couverture territoriale et de planifier les renforts inter-départementaux lors d'événements majeurs.
 
 ```cypher
 MATCH (s:Service)-[:SE_TROUVE]->(d:Departement)-[:APPARTIENT_A]->(r:Region)
@@ -482,11 +480,11 @@ RETURN s, d, r
 LIMIT 50
 ```
 
-![Services d'Ile-de-France](nosql_migration/requetes_neo4j/requete_06_graph.svg)
+![Services d'Île-de-France](nosql_migration/requetes_neo4j/requete_06_graph.svg)
 
-#### Requete 7 -- Repartition Police / Gendarmerie
+#### Requête 7 -- Répartition Police / Gendarmerie
 
-**Utilite** : La France a un systeme dual PN/GN. Visualiser la repartition par departement est essentiel pour eviter les doublons de competence et analyser correctement les statistiques (les methodes de comptage different entre les deux forces).
+**Utilité** : La France a un système dual PN/GN. Visualiser la répartition par département est essentiel pour éviter les doublons de compétence et analyser correctement les statistiques (les méthodes de comptage diffèrent entre les deux forces).
 
 ```cypher
 MATCH (s:Service)-[:SE_TROUVE]->(d:Departement),
@@ -495,11 +493,11 @@ WHERE d.nom_dept = 'Paris'
 RETURN s, d, p
 ```
 
-![Repartition PN/GN a Paris](nosql_migration/requetes_neo4j/requete_07_graph.svg)
+![Répartition PN/GN à Paris](nosql_migration/requetes_neo4j/requete_07_graph.svg)
 
-#### Requete 8 -- Adjacences d'un departement
+#### Requête 8 -- Adjacences d'un département
 
-**Utilite** : Lors d'un pic de criminalite, les departements voisins sont alertes (plans de recherche inter-departementaux). Cette requete fournit instantanement la liste des departements a alerter et illustre l'avantage du graphe sur le SQL pour les questions spatiales.
+**Utilité** : Lors d'un pic de criminalité, les départements voisins sont alertés (plans de recherche inter-départementaux). Cette requête fournit instantanément la liste des départements à alerter et illustre l'avantage du graphe sur le SQL pour les questions spatiales.
 
 ```cypher
 MATCH (d:Departement {code_dept: '75'})-[:EST_ADJACENT]-(voisin:Departement)
@@ -508,20 +506,20 @@ RETURN d, voisin
 
 ![Adjacences de Paris](nosql_migration/requetes_neo4j/requete_08_graph.svg)
 
-#### Requete 9 -- Carte complete des adjacences
+#### Requête 9 -- Carte complète des adjacences
 
-**Utilite** : Representation topologique du territoire. Permet a l'OCLDI (delinquance itinerante) de modeliser les corridors de deplacement et d'identifier les departements "carrefours" ayant le plus de routes de transit.
+**Utilité** : Représentation topologique du territoire. Permet à l'OCLDI (délinquance itinérante) de modéliser les corridors de déplacement et d'identifier les départements "carrefours" ayant le plus de routes de transit.
 
 ```cypher
 MATCH (a:Departement)-[:EST_ADJACENT]->(b:Departement)
 RETURN a, b
 ```
 
-![Carte complete des adjacences](nosql_migration/requetes_neo4j/requete_09_graph.svg)
+![Carte complète des adjacences](nosql_migration/requetes_neo4j/requete_09_graph.svg)
 
-#### Requete 10 -- Plus court chemin entre deux departements
+#### Requête 10 -- Plus court chemin entre deux départements
 
-**Utilite** : Planifier des escortes de detenus ou anticiper les itineraires de fuite en traversant le minimum de departements. En SQL, cette requete necessite une CTE recursive de 20 lignes ; en Cypher, `shortestPath` le fait en 3 lignes.
+**Utilité** : Planifier des escortes de détenus ou anticiper les itinéraires de fuite en traversant le minimum de départements. En SQL, cette requête nécessite une CTE récursive de 20 lignes ; en Cypher, `shortestPath` le fait en 3 lignes.
 
 ```cypher
 MATCH (a:Departement {code_dept: '75'}),
@@ -532,9 +530,9 @@ RETURN path
 
 ![Plus court chemin Paris-Marseille](nosql_migration/requetes_neo4j/requete_10_graph.svg)
 
-#### Requete 11 -- Detail des enregistrements d'un service
+#### Requête 11 -- Détail des enregistrements d'un service
 
-**Utilite** : Auditer un commissariat ou une brigade specifique lors d'inspections (IGPN/IGGN). Permet de detecter des anomalies statistiques en visualisant l'ensemble de l'activite d'un service.
+**Utilité** : Auditer un commissariat ou une brigade spécifique lors d'inspections (IGPN/IGGN). Permet de détecter des anomalies statistiques en visualisant l'ensemble de l'activité d'un service.
 
 ```cypher
 MATCH (s:Service)-[:ENREGISTRE]->(e:Enregistrement)-[:CONCERNE]->(i:Infraction)
@@ -543,11 +541,11 @@ RETURN s, e, i
 LIMIT 20
 ```
 
-![Detail des enregistrements d'un service](nosql_migration/requetes_neo4j/requete_11_graph.svg)
+![Détail des enregistrements d'un service](nosql_migration/requetes_neo4j/requete_11_graph.svg)
 
 ### 5.3 Comparaison SQL vs Cypher
 
-#### Exemple 1 -- Crimes par region
+#### Exemple 1 -- Crimes par région
 
 SQL (4 jointures) :
 ```sql
@@ -572,7 +570,7 @@ ORDER BY total DESC LIMIT 10
 
 #### Exemple 2 -- Plus court chemin
 
-SQL (~20 lignes de CTE recursive) :
+SQL (~20 lignes de CTE récursive) :
 ```sql
 WITH RECURSIVE chemin AS (
   SELECT dept_a, dept_b, 1 AS profondeur, ARRAY[dept_a, dept_b] AS parcours
@@ -594,7 +592,7 @@ MATCH path = shortestPath(
 RETURN path
 ```
 
-#### Exemple 3 -- Repartition PN/GN par departement
+#### Exemple 3 -- Répartition PN/GN par département
 
 SQL (3 jointures, table d'association explicite) :
 ```sql
@@ -607,7 +605,7 @@ WHERE d.nom_dept = 'Paris'
 GROUP BY p.nom_perimetre;
 ```
 
-Cypher (relation directe, pas de table intermediaire) :
+Cypher (relation directe, pas de table intermédiaire) :
 ```cypher
 MATCH (s:Service)-[:SE_TROUVE]->(d:Departement),
       (s)-[:APPARTIENT]->(p:Perimetre)
@@ -615,24 +613,24 @@ WHERE d.nom_dept = 'Paris'
 RETURN p.nom_perimetre, COUNT(s) AS nb_services
 ```
 
-#### Synthese
+#### Synthèse
 
-| Critere | SQL | Cypher |
+| Critère | SQL | Cypher |
 |---|---|---|
-| Lisibilite | Technique (jointures) | Naturelle (patterns) |
-| Traversees profondes | N jointures | Suivi de pointeurs |
-| Plus courts chemins | CTE recursive | `shortestPath` natif |
+| Lisibilité | Technique (jointures) | Naturelle (patterns) |
+| Traversées profondes | N jointures | Suivi de pointeurs |
+| Plus courts chemins | CTE récursive | `shortestPath` natif |
 | Tables d'association | Jointure obligatoire | Relation directe |
 
 ---
 
-## 6. Ajout de nouvelles donnees
+## 6. Ajout de nouvelles données
 
-Pour ajouter une nouvelle annee ou un nouveau type d'infraction, les deux bases offrent des approches differentes.
+Pour ajouter une nouvelle année ou un nouveau type d'infraction, les deux bases offrent des approches différentes.
 
-En **PostgreSQL**, l'ordre d'insertion est contraint par les cles etrangeres (il faut creer l'infraction avant l'enregistrement) et l'idempotence repose sur `ON CONFLICT DO NOTHING`.
+En **PostgreSQL**, l'ordre d'insertion est contraint par les clés étrangères (il faut créer l'infraction avant l'enregistrement) et l'idempotence repose sur `ON CONFLICT DO NOTHING`.
 
-En **Neo4j**, `MERGE` permet d'inserer dans n'importe quel ordre et garantit nativement l'idempotence. Exemple d'ajout d'un enregistrement :
+En **Neo4j**, `MERGE` permet d'insérer dans n'importe quel ordre et garantit nativement l'idempotence. Exemple d'ajout d'un enregistrement :
 
 ```cypher
 MATCH (s:Service {code_service: 'SVC-00001'})
@@ -643,45 +641,43 @@ MERGE (s)-[:ENREGISTRE]->(e)
 MERGE (e)-[:CONCERNE]->(i)
 ```
 
-| Critere | PostgreSQL | Neo4j |
+| Critère | PostgreSQL | Neo4j |
 |---|---|---|
 | Ordre d'insertion | Contraint par les FK | Flexible |
 | Idempotence | `ON CONFLICT DO NOTHING` | `MERGE` natif |
-| Modification du schema | Necessaire si nouveau type d'entite | Pas necessaire |
-| Validation | CHECK, FK, UNIQUE automatiques | Contraintes d'unicite + logique applicative |
+| Modification du schéma | Nécessaire si nouveau type d'entité | Pas nécessaire |
+| Validation | CHECK, FK, UNIQUE automatiques | Contraintes d'unicité + logique applicative |
 
 Le graphe est plus souple, mais offre moins de garde-fous automatiques que le relationnel.
 
 ---
 
-## 7. Difficultes rencontrees
+## 7. Difficultés rencontrées
 
-| Probleme | Ce qui coincait | Comment on a fait |
+| Problème | Ce qui coinçait | Comment on a fait |
 |---|---|---|
-| Format Excel matriciel | Format pivot inadapte au traitement | Methode `pd.melt()` de Pandas |
-| 3 lignes d'en-tete | Pandas ne gere pas ca nativement | Lecture separee avec `nrows=3` + mapping manuel |
-| Codes 2A/2B (Corse) | Impossible de stocker en entier | `VARCHAR` systematique pour tous les codes |
+| Format Excel matriciel | Format pivot inadapté au traitement | Méthode `pd.melt()` de Pandas |
+| 3 lignes d'en-tête | Pandas ne gère pas ça nativement | Lecture séparée avec `nrows=3` + mapping manuel |
+| Codes 2A/2B (Corse) | Impossible de stocker en entier | `VARCHAR` systématique pour tous les codes |
 | 1,1 million de lignes | Insertion unitaire beaucoup trop lente | Batching (5 000 en PG, 1 200 en Neo4j) |
-| Coordination Docker | La migration demarrait avant que les bases soient pretes | Healthcheck + `depends_on: condition: service_healthy` |
+| Coordination Docker | La migration démarrait avant que les bases soient prêtes | Healthcheck + `depends_on: condition: service_healthy` |
 
 ---
 
 ## 8. Conclusion
 
-On a migre l'integralite des donnees de criminalite depuis PostgreSQL vers Neo4j :
+On a migré l'intégralité des données de criminalité depuis PostgreSQL vers Neo4j :
 
-- 1 120 775 enregistrements migres sans perte
-- 6 types de noeuds et 6 types de relations
-- 239 relations d'adjacence ajoutees en enrichissement
-- 11 requetes metier qui montrent ce que le graphe apporte
-- Une infrastructure Docker qui permet de tout relancer en une commande
+- 1 120 775 enregistrements migrés sans perte
+- 6 types de nœuds et 6 types de relations
+- 239 relations d'adjacence ajoutées en enrichissement
+- 11 requêtes métier qui montrent ce que le graphe apporte
 
-Quelques recommandations si le projet devait etre pousse plus loin :
+Quelques recommandations si le projet devait être poussé plus loin :
 
-1. Garder les deux bases : PostgreSQL pour le stockage de reference, Neo4j pour l'analyse relationnelle.
-2. Enrichir le graphe avec des donnees supplementaires (demographie, flux de criminalite, relations entre types d'infractions).
-3. Former les analystes a Cypher : le langage se prend en main assez vite pour des questions relationnelles.
-4. Industrialiser le pipeline avec du logging, des metriques, et une orchestration type Airflow pour les mises a jour planifiees.
+1. Garder les deux bases : PostgreSQL pour le stockage de référence, Neo4j pour l'analyse relationnelle.
+2. Enrichir le graphe avec des données supplémentaires (démographie, flux de criminalité, relations entre types d'infractions).
+3. Former les analystes à Cypher : le langage se prend en main assez vite pour des questions relationnelles.
+4. Industrialiser le pipeline avec du logging, des métriques, et une orchestration type Airflow pour les mises à jour planifiées.
 
-On pourrait aussi aller plus loin avec les outils de Graph Data Science de Neo4j (detection de communautes, centralite) ou brancher des dashboards avec Neo4j Bloom ou Grafana.
-
+On pourrait aussi aller plus loin avec les outils de Graph Data Science de Neo4j (détection de communautés, centralité) ou brancher des dashboards avec Neo4j Bloom ou Grafana.
