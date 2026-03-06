@@ -5,7 +5,6 @@ __pycache__/
 *.pyc
 
 # Fichiers generes
-rapport_final.pdf
 rapport_final.html
 convert_to_pdf.py
 
@@ -18,3 +17,4 @@ projet/import_graph.cypher
 .DS_Store
 Thumbs.db
 *.tmp
+~$*
