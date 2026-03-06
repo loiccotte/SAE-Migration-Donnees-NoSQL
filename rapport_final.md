@@ -20,7 +20,6 @@
 6. Ajout de nouvelles donnees
 7. Difficultes rencontrees
 8. Conclusion
-9. Annexes
 
 ---
 
@@ -126,59 +125,14 @@ Le schema MCD complet est dans `MCD/MCD_VF.png`.
 
 ### 2.4 Modele logique et physique
 
-Voici le schema SQL avec les choix qu'on a faits :
+Le schema SQL comprend 7 tables : `region`, `departement`, `service`, `perimetre`, `service_perimetre` (table d'association N-N), `infraction` et `enregistrement`. Le DDL complet est disponible dans le fichier `sql_ddl_postgres.sql` du projet.
 
-```sql
-CREATE TABLE region (
-  id_region    VARCHAR(50) PRIMARY KEY,
-  nom_region   VARCHAR(100) NOT NULL
-);
-
-CREATE TABLE departement (
-  code_dept    VARCHAR(50) PRIMARY KEY,    -- VARCHAR car codes 2A/2B (Corse)
-  nom_dept     VARCHAR(100) NOT NULL,
-  id_region    VARCHAR(50) NOT NULL REFERENCES region(id_region)
-);
-
-CREATE TABLE service (
-  code_service VARCHAR(50) PRIMARY KEY,
-  nom_service  VARCHAR(100) NOT NULL,
-  code_dept    VARCHAR(50) NOT NULL REFERENCES departement(code_dept)
-);
-
-CREATE TABLE perimetre (
-  id_perimetre  VARCHAR(50) PRIMARY KEY,
-  nom_perimetre VARCHAR(100) NOT NULL
-);
-
--- Table d'association N-N (pas d'attribut propre)
-CREATE TABLE service_perimetre (
-  code_service  VARCHAR(50) NOT NULL REFERENCES service(code_service),
-  id_perimetre  VARCHAR(50) NOT NULL REFERENCES perimetre(id_perimetre),
-  PRIMARY KEY (code_service, id_perimetre)
-);
-
-CREATE TABLE infraction (
-  code_index VARCHAR(50) PRIMARY KEY,
-  libelle    VARCHAR(200) NOT NULL
-);
-
-CREATE TABLE enregistrement (
-  id_enregistrement VARCHAR(120) PRIMARY KEY,
-  annee            VARCHAR(10) NOT NULL,
-  nb_faits         INTEGER NOT NULL CHECK (nb_faits >= 0),
-  code_service     VARCHAR(50) NOT NULL REFERENCES service(code_service),
-  code_index       VARCHAR(50) NOT NULL REFERENCES infraction(code_index),
-  CONSTRAINT uq_enr UNIQUE (annee, code_service, code_index)
-);
-```
-
-Quelques points a noter :
+Choix techniques principaux :
 
 - `VARCHAR` partout pour les codes, a cause des codes corses `2A`/`2B` qu'on ne peut pas stocker en entier.
 - `CHECK (nb_faits >= 0)` pour empecher les valeurs negatives.
 - `UNIQUE (annee, code_service, code_index)` pour garantir un seul enregistrement par triplet.
-- Les `REFERENCES` (cles etrangeres) empechent de creer un departement sans sa region, par exemple.
+- Cles etrangeres entre toutes les tables pour garantir l'integrite referentielle.
 
 ### 2.5 Alimentation de la base
 
@@ -339,82 +293,20 @@ La table `service_perimetre` n'existe plus. Chaque ligne devient une relation di
 
 ## 4. Phase 3 — Migration des donnees
 
-### 4.1 Les differentes methodes de migration
+### 4.1 Choix de la methode de migration
 
-Avant de se lancer, on a regarde ce qui existait comme methodes.
+Plusieurs methodes existent pour migrer des donnees vers Neo4j :
 
-#### 1. ETL applicatif (Python + driver Bolt) -- ce qu'on a choisi
+| Methode | Controle | Performance | Reproductibilite |
+|---|---|---|---|
+| ETL applicatif (Python) | Total | Bonne | Excellente |
+| LOAD CSV | Faible | Bonne | Moyenne |
+| neo4j-admin import | Aucun | Excellente | Bonne |
+| APOC (JDBC) | Moyen | Bonne | Bonne |
 
-Un script Python lit PostgreSQL et ecrit dans Neo4j via le driver officiel Bolt.
+On a choisi l'ETL applicatif en Python car on avait besoin de transformer les donnees pendant la migration (FK vers relations, suppression de la table d'association, conversion de types) et de gerer les erreurs lot par lot sur 1,1 million de lignes.
 
-Avantages : controle total sur les transformations, gestion d'erreurs fine, code versionnable. Inconvenient principal : il faut le developper.
-
-#### 2. LOAD CSV natif Neo4j
-
-Commande Cypher qui lit directement des fichiers CSV.
-
-```cypher
-LOAD CSV WITH HEADERS FROM 'file:///region.csv' AS row
-MERGE (r:Region {id_region: row.id_region})
-```
-
-Simple et natif, mais pas de transformation possible. Il faut pre-formater les CSV et les placer dans le bon repertoire.
-
-#### 3. neo4j-admin import
-
-Outil en ligne de commande pour l'import massif. Tres rapide car il ecrit directement dans les fichiers de stockage, mais la base doit etre vide et le format CSV est strict.
-
-#### 4. APOC (Awesome Procedures On Cypher)
-
-Bibliotheque de procedures etendues, incluant `apoc.load.jdbc` pour lire depuis un SGBDR. Connexion directe PostgreSQL vers Neo4j sans fichier intermediaire, mais c'est un plugin a installer avec de la configuration JDBC.
-
-#### 5. Neo4j ETL Tool
-
-Outil graphique de mapping visuel tables vers noeuds. Interface visuelle mais limite, peu flexible, pas fiable sur de gros volumes.
-
-#### Comparatif
-
-| Methode | Controle | Performance | Complexite | Reproductibilite |
-|---|---|---|---|---|
-| ETL applicatif (Python) | Total | Bonne | Moyenne | Excellente |
-| LOAD CSV | Faible | Bonne | Faible | Moyenne |
-| neo4j-admin import | Aucun | Excellente | Moyenne | Bonne |
-| APOC (JDBC) | Moyen | Bonne | Moyenne | Bonne |
-| Neo4j ETL Tool | Faible | Moyenne | Faible | Faible |
-
-#### Pourquoi on a choisi Python
-
-On avait besoin de transformer les donnees pendant la migration : les FK deviennent des relations, la table d'association disparait, les types sont convertis. Avec 1,1 million de lignes, il fallait aussi pouvoir gerer les erreurs lot par lot. Et le script s'integre bien dans Docker, ce qui le rend reproductible.
-
-### 4.2 Architecture technique
-
-L'infrastructure repose sur Docker Compose avec 3 conteneurs :
-
-```
-+---------------------------------------------+
-|              Docker Compose                  |
-|                                              |
-|  +------------+  +----------+  +----------+ |
-|  | PostgreSQL |  |  Neo4j   |  | Migration| |
-|  |    17      |  |    5     |  | Python   | |
-|  | Port 5433  |  |Port 7474 |  |  3.11    | |
-|  |            |  |Port 7687 |  |          | |
-|  +------------+  +----------+  +----------+ |
-|       ^               ^           |    |     |
-|       +---------------+-----------+    |     |
-|          depends_on (healthy)          |     |
-+---------------------------------------------+
-```
-
-On a choisi Docker pour trois raisons :
-
-- `docker compose up` recree l'environnement identique sur n'importe quelle machine.
-- Chaque service a ses dependances propres, pas de conflits de versions.
-- `depends_on` avec healthcheck garantit que la migration ne demarre que quand les deux bases sont pretes.
-
-Le conteneur de migration utilise un profil (`migrate`) : il ne demarre pas automatiquement, on le lance quand on est pret.
-
-### 4.3 Le script de migration en detail
+### 4.2 Le script de migration en detail
 
 Le script `migrate_pg_to_neo4j_pg8000.py` fonctionne en etapes sequentielles.
 
@@ -509,9 +401,7 @@ Aucune donnee perdue ni dupliquee, 100% de coherence.
 
 #### Requete 1 -- Comptage des noeuds et relations
 
-**Justification** : Apres toute migration de donnees, la premiere etape est de verifier qu'aucune donnee n'a ete perdue. En comparant les comptages Neo4j avec ceux de PostgreSQL, on garantit une coherence a 100%. Dans un contexte reel, ce type de controle est systematique lors d'audits de qualite des donnees ou de certifications ISO 27001 (securite de l'information).
-
-**Cas pratique** : Le Ministere de l'Interieur doit certifier que les statistiques publiees sont completes. Si un departement ou un type d'infraction manque apres migration, les analyses en aval seraient faussees. Cette requete sert de test de non-regression.
+**Utilite** : Verifier qu'aucune donnee n'a ete perdue apres migration. Le Ministere doit certifier que les statistiques publiees sont completes ; cette requete sert de test de non-regression.
 
 ```cypher
 MATCH (n)
@@ -529,9 +419,7 @@ ORDER BY nombre DESC
 
 #### Requete 2 -- Visualisation du modele complet
 
-**Justification** : Avant d'exploiter une base graphe, il faut verifier que le schema est conforme a la conception. Cette requete affiche un echantillon de tous les types de noeuds et relations en une seule vue. C'est l'equivalent d'un diagramme entite-relation, mais genere directement depuis les donnees reelles.
-
-**Cas pratique** : Lors de la presentation du projet aux analystes du Ministere, cette visualisation permet de valider que le modele correspond bien au domaine metier : un service se trouve dans un departement, appartient a un perimetre (PN ou GN), et enregistre des faits lies a des infractions. Si une relation manque ou est mal orientee, on le voit immediatement.
+**Utilite** : Valider visuellement que le schema graphe est conforme a la conception. Permet aux analystes de verifier que le modele correspond au domaine metier (services, departements, infractions) et de reperer une relation manquante ou mal orientee.
 
 ```cypher
 MATCH (s:Service)-[:SE_TROUVE]->(d:Departement)-[:APPARTIENT_A]->(r:Region),
@@ -545,9 +433,7 @@ LIMIT 5
 
 #### Requete 3 -- Top 10 des infractions les plus frequentes
 
-**Justification** : Connaitre les infractions les plus frequentes a l'echelle nationale est essentiel pour orienter les politiques de prevention et allouer les budgets. Le graphe permet ici d'agreger les donnees en traversant directement la relation `CONCERNE` sans jointure intermediaire.
-
-**Cas pratique** : Le Ministere publie chaque annee un bilan statistique de la delinquance. Cette requete produit directement le classement national des infractions. Par exemple, si les vols sans violence dominent largement, cela justifie des campagnes de prevention ciblees (video-protection, sensibilisation) plutot que des renforts d'effectifs sur le terrain.
+**Utilite** : Produire le classement national des infractions pour le bilan annuel de la delinquance. Oriente les politiques de prevention : si les vols sans violence dominent, cela justifie des campagnes ciblees plutot que des renforts d'effectifs.
 
 ```cypher
 MATCH (e:Enregistrement)-[:CONCERNE]->(i:Infraction)
@@ -560,9 +446,7 @@ LIMIT 10
 
 #### Requete 4 -- Top 3 des crimes par departement
 
-**Justification** : Les realites de la criminalite varient fortement d'un departement a l'autre. Un departement rural n'a pas les memes problematiques qu'un departement urbain. Identifier les 3 infractions dominantes par departement permet d'adapter les moyens locaux de facon ciblee.
-
-**Cas pratique** : Les prefets utilisent ce type de classement pour rediger les plans departementaux de prevention de la delinquance (PDPD). Par exemple, si dans les Bouches-du-Rhone les vols avec violence dominent tandis que dans la Creuse ce sont les atteintes aux biens agricoles, les strategies deployees seront radicalement differentes. Cette requete fournit la base chiffree de ces decisions.
+**Utilite** : Les prefets utilisent ce classement pour rediger les plans departementaux de prevention de la delinquance (PDPD). Les infractions dominantes different fortement entre un departement urbain et rural, ce qui conduit a des strategies differentes.
 
 ```cypher
 MATCH (s:Service)-[:SE_TROUVE]->(d:Departement),
@@ -578,9 +462,7 @@ RETURN departement, t.infraction AS infraction, t.total AS total_faits
 
 #### Requete 5 -- Hierarchie regions / departements
 
-**Justification** : Le decoupage administratif francais (regions/departements) est la colonne vertebrale de toute analyse territoriale. Visualiser cette hierarchie sous forme de graphe permet de verifier que chaque departement est bien rattache a sa region et de reperer d'eventuelles anomalies (departement orphelin, mauvais rattachement).
-
-**Cas pratique** : Depuis la reforme territoriale de 2016 (passage de 22 a 13 regions metropolitaines), certains departements ont change de region. Cette vue permet de valider que les rattachements sont a jour. Elle sert aussi de support cartographique pour les reunions inter-regionales de securite, ou les directeurs zonaux ont besoin de voir quels departements relevent de leur competence.
+**Utilite** : Valider le rattachement de chaque departement a sa region, notamment apres la reforme territoriale de 2016. Sert de support pour les reunions inter-regionales de securite.
 
 ```cypher
 MATCH (d:Departement)-[:APPARTIENT_A]->(r:Region)
@@ -591,9 +473,7 @@ RETURN d, r
 
 #### Requete 6 -- Services d'une region (Ile-de-France)
 
-**Justification** : L'Ile-de-France concentre a elle seule pres de 20% de la population francaise et une part disproportionnee de la criminalite. Visualiser le maillage des services (commissariats, brigades) permet d'evaluer la couverture territoriale et d'identifier d'eventuelles zones blanches.
-
-**Cas pratique** : La Prefecture de Police de Paris et les prefectures de la petite couronne (92, 93, 94) coordonnent regulierement leurs effectifs lors d'evenements majeurs (manifestations, evenements sportifs, alertes terroristes). Cette vue graphe montre quels services sont disponibles dans quels departements, facilitant la planification des renforts inter-departementaux. Elle permet aussi de verifier que chaque commune est bien couverte par au moins un service.
+**Utilite** : L'Ile-de-France concentre 20% de la population et une part importante de la criminalite. Cette vue permet d'evaluer la couverture territoriale et de planifier les renforts inter-departementaux lors d'evenements majeurs.
 
 ```cypher
 MATCH (s:Service)-[:SE_TROUVE]->(d:Departement)-[:APPARTIENT_A]->(r:Region)
@@ -606,9 +486,7 @@ LIMIT 50
 
 #### Requete 7 -- Repartition Police / Gendarmerie
 
-**Justification** : La France a un systeme dual de securite interieure : la Police Nationale couvre les zones urbaines (communes de plus de 20 000 habitants en general) et la Gendarmerie Nationale couvre les zones rurales et periurbaines. Comprendre cette repartition est essentiel pour analyser correctement les statistiques, car les methodes de comptage et les perimetres d'intervention different entre les deux forces.
-
-**Cas pratique** : Lors de la creation de la Police de Securite du Quotidien (PSQ), le Ministere a du identifier quels territoires relevaient de quelle force pour eviter les doublons de competence. A Paris, seule la Police Nationale intervient (via la Prefecture de Police), mais dans des departements mixtes comme le Val-d'Oise, les deux forces coexistent. Cette requete permet de visualiser immediatement cette repartition pour n'importe quel departement.
+**Utilite** : La France a un systeme dual PN/GN. Visualiser la repartition par departement est essentiel pour eviter les doublons de competence et analyser correctement les statistiques (les methodes de comptage different entre les deux forces).
 
 ```cypher
 MATCH (s:Service)-[:SE_TROUVE]->(d:Departement),
@@ -621,9 +499,7 @@ RETURN s, d, p
 
 #### Requete 8 -- Adjacences d'un departement
 
-**Justification** : Les adjacences geographiques sont au coeur de l'interet du modele graphe. En SQL, trouver les voisins d'un departement necessite une jointure sur une table d'adjacence. En graphe, c'est une simple traversee de relation. Cette requete illustre concretement pourquoi le graphe est plus adapte aux questions spatiales.
-
-**Cas pratique** : Quand un departement connait un pic de cambriolages, les forces de l'ordre des departements voisins sont alertees car les malfaiteurs operent souvent sur plusieurs departements limitrophes. C'est le principe des "plans de recherche" inter-departementaux. Par exemple, une serie de braquages a Paris (75) declenchera une vigilance renforcee dans les Hauts-de-Seine (92), la Seine-Saint-Denis (93) et le Val-de-Marne (94). Cette requete fournit instantanement la liste des departements a alerter.
+**Utilite** : Lors d'un pic de criminalite, les departements voisins sont alertes (plans de recherche inter-departementaux). Cette requete fournit instantanement la liste des departements a alerter et illustre l'avantage du graphe sur le SQL pour les questions spatiales.
 
 ```cypher
 MATCH (d:Departement {code_dept: '75'})-[:EST_ADJACENT]-(voisin:Departement)
@@ -634,9 +510,7 @@ RETURN d, voisin
 
 #### Requete 9 -- Carte complete des adjacences
 
-**Justification** : La carte complete des adjacences forme une representation topologique du territoire francais. Chaque departement est un noeud, chaque frontiere partagee est une arete. Cette structure est la base de toute analyse spatiale avancee : detection de clusters, propagation de phenomenes, optimisation de tournees.
-
-**Cas pratique** : L'Office Central de Lutte contre la Delinquance Itinerante (OCLDI) traque les reseaux criminels qui se deplacent de departement en departement. La carte des adjacences permet de modeliser les corridors de deplacement possibles et d'identifier les departements "carrefours" (ceux qui ont le plus de voisins et donc le plus de routes de transit). Elle sert aussi a la Direction Generale de la Securite Civile pour planifier les renforts en cas de catastrophe naturelle touchant plusieurs departements contigus.
+**Utilite** : Representation topologique du territoire. Permet a l'OCLDI (delinquance itinerante) de modeliser les corridors de deplacement et d'identifier les departements "carrefours" ayant le plus de routes de transit.
 
 ```cypher
 MATCH (a:Departement)-[:EST_ADJACENT]->(b:Departement)
@@ -647,9 +521,7 @@ RETURN a, b
 
 #### Requete 10 -- Plus court chemin entre deux departements
 
-**Justification** : Le calcul de plus court chemin est l'operation ou le graphe surpasse le plus nettement le relationnel. En SQL, il faut une CTE recursive d'une vingtaine de lignes. En Cypher, `shortestPath` le fait nativement en 3 lignes. Cette requete montre Paris (75) vers les Bouches-du-Rhone (13), soit un trajet nord-sud traversant plusieurs departements.
-
-**Cas pratique** : Lors du transferement de detenus entre etablissements penitentiaires, l'administration doit planifier les escortes en traversant le minimum de departements (chaque franchissement de limite departementale implique un changement de competence et une coordination supplementaire). De meme, lors de la traque d'un suspect en fuite, les enqueteurs utilisent ce type d'analyse pour anticiper les itineraires probables et positionner des barrages aux bons endroits. Le chemin Paris-Marseille traverse environ 7 departements, ce qui donne autant de points de coordination.
+**Utilite** : Planifier des escortes de detenus ou anticiper les itineraires de fuite en traversant le minimum de departements. En SQL, cette requete necessite une CTE recursive de 20 lignes ; en Cypher, `shortestPath` le fait en 3 lignes.
 
 ```cypher
 MATCH (a:Departement {code_dept: '75'}),
@@ -662,9 +534,7 @@ RETURN path
 
 #### Requete 11 -- Detail des enregistrements d'un service
 
-**Justification** : Descendre au niveau d'un service individuel permet d'auditer ses enregistrements. On voit quelles infractions il a traitees, en quelle quantite, et sur quelles annees. C'est le niveau de granularite le plus fin du graphe.
-
-**Cas pratique** : Lors des inspections generales (IGPN pour la police, IGGN pour la gendarmerie), les inspecteurs examinent les statistiques d'un commissariat ou d'une brigade specifique pour detecter des anomalies : un service qui n'enregistre aucun vol alors que ses voisins en comptent des centaines, ou inversement un service avec des chiffres anormalement eleves qui pourraient indiquer un probleme de perimetre. Cette requete permet de "zoomer" instantanement sur un service et de voir l'ensemble de son activite sous forme de graphe.
+**Utilite** : Auditer un commissariat ou une brigade specifique lors d'inspections (IGPN/IGGN). Permet de detecter des anomalies statistiques en visualisant l'ensemble de l'activite d'un service.
 
 ```cypher
 MATCH (s:Service)-[:ENREGISTRE]->(e:Enregistrement)-[:CONCERNE]->(i:Infraction)
@@ -758,35 +628,11 @@ RETURN p.nom_perimetre, COUNT(s) AS nb_services
 
 ## 6. Ajout de nouvelles donnees
 
-### 6.1 Cote relationnel (PostgreSQL)
+Pour ajouter une nouvelle annee ou un nouveau type d'infraction, les deux bases offrent des approches differentes.
 
-#### Ajouter une nouvelle annee
+En **PostgreSQL**, l'ordre d'insertion est contraint par les cles etrangeres (il faut creer l'infraction avant l'enregistrement) et l'idempotence repose sur `ON CONFLICT DO NOTHING`.
 
-```sql
-INSERT INTO enregistrement (id_enregistrement, annee, nb_faits, code_service, code_index)
-VALUES ('2023-SVC-00001-01', '2023', 42, 'SVC-00001', '01');
-```
-
-Les contraintes verifient automatiquement que le service et l'infraction existent (FK) et qu'il n'y a pas de doublon (UNIQUE).
-
-Pour un chargement massif, on relance le script avec `ON CONFLICT DO NOTHING`.
-
-#### Ajouter un nouveau type d'infraction
-
-```sql
--- 1. D'abord l'infraction
-INSERT INTO infraction (code_index, libelle) VALUES ('108', 'Cyberharcelement');
-
--- 2. Puis les enregistrements
-INSERT INTO enregistrement (id_enregistrement, annee, nb_faits, code_service, code_index)
-VALUES ('2023-SVC-00001-108', '2023', 15, 'SVC-00001', '108');
-```
-
-L'ordre compte : il faut creer l'infraction avant de l'utiliser dans un enregistrement, sinon la contrainte FK bloque.
-
-### 6.2 Cote graphe (Neo4j)
-
-#### Ajouter une nouvelle annee
+En **Neo4j**, `MERGE` permet d'inserer dans n'importe quel ordre et garantit nativement l'idempotence. Exemple d'ajout d'un enregistrement :
 
 ```cypher
 MATCH (s:Service {code_service: 'SVC-00001'})
@@ -797,32 +643,14 @@ MERGE (s)-[:ENREGISTRE]->(e)
 MERGE (e)-[:CONCERNE]->(i)
 ```
 
-`MERGE` garantit que si l'enregistrement existe deja, il est mis a jour au lieu d'etre duplique.
-
-#### Ajouter un nouveau type d'infraction
-
-```cypher
-MERGE (i:Infraction {code_index: '108'})
-SET i.libelle = 'Cyberharcelement'
-WITH i
-MATCH (s:Service {code_service: 'SVC-00001'})
-MERGE (e:Enregistrement {id_enregistrement: '2023-SVC-00001-108'})
-SET e.annee = '2023', e.nb_faits = 15
-MERGE (s)-[:ENREGISTRE]->(e)
-MERGE (e)-[:CONCERNE]->(i)
-```
-
-### 6.3 Comparaison
-
 | Critere | PostgreSQL | Neo4j |
 |---|---|---|
-| Ordre d'insertion | Contraint par les FK | Flexible (MERGE dans n'importe quel ordre) |
+| Ordre d'insertion | Contraint par les FK | Flexible |
 | Idempotence | `ON CONFLICT DO NOTHING` | `MERGE` natif |
-| Modification du schema | Necessaire si nouveau type d'entite | Pas necessaire (graphe flexible) |
-| Ajout de relations | Table d'association a creer | Simple relation entre noeuds existants |
+| Modification du schema | Necessaire si nouveau type d'entite | Pas necessaire |
 | Validation | CHECK, FK, UNIQUE automatiques | Contraintes d'unicite + logique applicative |
 
-En gros, le graphe est plus souple (pas de schema rigide a modifier), mais offre moins de garde-fous automatiques que le relationnel.
+Le graphe est plus souple, mais offre moins de garde-fous automatiques que le relationnel.
 
 ---
 
@@ -857,183 +685,3 @@ Quelques recommandations si le projet devait etre pousse plus loin :
 
 On pourrait aussi aller plus loin avec les outils de Graph Data Science de Neo4j (detection de communautes, centralite) ou brancher des dashboards avec Neo4j Bloom ou Grafana.
 
----
-
-## 9. Annexes
-
-### Annexe A -- Script SQL DDL complet
-
-```sql
-DROP TABLE IF EXISTS service_perimetre;
-DROP TABLE IF EXISTS enregistrement;
-DROP TABLE IF EXISTS perimetre;
-DROP TABLE IF EXISTS service;
-DROP TABLE IF EXISTS departement;
-DROP TABLE IF EXISTS region;
-DROP TABLE IF EXISTS infraction;
-
-CREATE TABLE region (
-  id_region    VARCHAR(50) PRIMARY KEY,
-  nom_region   VARCHAR(100) NOT NULL
-);
-
-CREATE TABLE departement (
-  code_dept    VARCHAR(50) PRIMARY KEY,
-  nom_dept     VARCHAR(100) NOT NULL,
-  id_region    VARCHAR(50) NOT NULL REFERENCES region(id_region)
-);
-
-CREATE TABLE service (
-  code_service VARCHAR(50) PRIMARY KEY,
-  nom_service  VARCHAR(100) NOT NULL,
-  code_dept    VARCHAR(50) NOT NULL REFERENCES departement(code_dept)
-);
-
-CREATE TABLE perimetre (
-  id_perimetre  VARCHAR(50) PRIMARY KEY,
-  nom_perimetre VARCHAR(100) NOT NULL
-);
-
-CREATE TABLE service_perimetre (
-  code_service  VARCHAR(50) NOT NULL REFERENCES service(code_service),
-  id_perimetre  VARCHAR(50) NOT NULL REFERENCES perimetre(id_perimetre),
-  PRIMARY KEY (code_service, id_perimetre)
-);
-
-CREATE TABLE infraction (
-  code_index VARCHAR(50) PRIMARY KEY,
-  libelle    VARCHAR(200) NOT NULL
-);
-
-CREATE TABLE enregistrement (
-  id_enregistrement VARCHAR(120) PRIMARY KEY,
-  annee            VARCHAR(10) NOT NULL,
-  nb_faits         INTEGER NOT NULL CHECK (nb_faits >= 0),
-  code_service     VARCHAR(50) NOT NULL REFERENCES service(code_service),
-  code_index       VARCHAR(50) NOT NULL REFERENCES infraction(code_index),
-  CONSTRAINT uq_enr UNIQUE (annee, code_service, code_index)
-);
-```
-
-### Annexe B -- Script de migration (extrait principal)
-
-```python
-# Regions
-write(
-    "UNWIND $rows AS row MERGE (r:Region {id_region: row.id_region}) "
-    "SET r.nom_region = row.nom_region",
-    fetch("SELECT id_region, nom_region FROM region")
-)
-
-# Departements + relation APPARTIENT_A
-write(
-    "UNWIND $rows AS row "
-    "MERGE (d:Departement {code_dept: row.code_dept}) SET d.nom_dept = row.nom_dept "
-    "WITH row, d MATCH (r:Region {id_region: row.id_region}) "
-    "MERGE (d)-[:APPARTIENT_A]->(r)",
-    fetch("SELECT code_dept, nom_dept, id_region FROM departement")
-)
-
-# Services + relation SE_TROUVE
-write(
-    "UNWIND $rows AS row "
-    "MERGE (s:Service {code_service: row.code_service}) SET s.nom_service = row.nom_service "
-    "WITH row, s MATCH (d:Departement {code_dept: row.code_dept}) "
-    "MERGE (s)-[:SE_TROUVE]->(d)",
-    fetch("SELECT code_service, nom_service, code_dept FROM service")
-)
-
-# Service-Perimetre (table d'association -> relation directe)
-write(
-    "UNWIND $rows AS row "
-    "MATCH (s:Service {code_service: row.code_service}) "
-    "MATCH (p:Perimetre {id_perimetre: row.id_perimetre}) "
-    "MERGE (s)-[:APPARTIENT]->(p)",
-    fetch("SELECT code_service, id_perimetre FROM service_perimetre")
-)
-
-# Enregistrements + relations ENREGISTRE et CONCERNE
-write(
-    "UNWIND $rows AS row "
-    "MERGE (e:Enregistrement {id_enregistrement: row.id_enregistrement}) "
-    "SET e.annee = row.annee, e.nb_faits = toInteger(row.nb_faits) "
-    "WITH row, e MATCH (s:Service {code_service: row.code_service}) "
-    "MERGE (s)-[:ENREGISTRE]->(e) "
-    "WITH row, e MATCH (i:Infraction {code_index: row.code_index}) "
-    "MERGE (e)-[:CONCERNE]->(i)",
-    fetch("SELECT id_enregistrement, annee, nb_faits, code_service, code_index "
-          "FROM enregistrement"),
-    batch_size=1200
-)
-
-# Adjacences
-write(
-    "UNWIND $rows AS row "
-    "MATCH (da:Departement {code_dept: row.dept_a}) "
-    "MATCH (db:Departement {code_dept: row.dept_b}) "
-    "MERGE (da)-[:EST_ADJACENT]->(db)",
-    fetch("SELECT dept_a, dept_b FROM adjacence")
-)
-```
-
-### Annexe C -- Docker Compose
-
-```yaml
-version: '3.8'
-
-services:
-  postgres:
-    image: postgres:17
-    container_name: postgres-crimes
-    env_file: .env
-    environment:
-      POSTGRES_USER: ${PG_USER}
-      POSTGRES_PASSWORD: ${PG_PASSWORD}
-      POSTGRES_DB: ${PG_DB}
-    ports:
-      - "5433:5432"
-    volumes:
-      - pg_data:/var/lib/postgresql/data
-      - ./dump.sql:/dumps/dump.sql:ro
-      - ./init-db.sh:/docker-entrypoint-initdb.d/01-init-db.sh:ro
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${PG_USER} -d ${PG_DB}"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
-  neo4j:
-    image: neo4j:5
-    container_name: neo4j-crimes
-    env_file: .env
-    environment:
-      NEO4J_AUTH: ${NEO_USER}/${NEO_PASSWORD}
-    ports:
-      - "7474:7474"
-      - "7687:7687"
-    volumes:
-      - neo4j_data:/data
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:7474"]
-      interval: 10s
-      timeout: 5s
-      retries: 12
-      start_period: 30s
-
-  migration:
-    profiles: [migrate]
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: migration-crimes
-    env_file: .env
-    depends_on:
-      postgres:
-        condition: service_healthy
-      neo4j:
-        condition: service_healthy
-
-volumes:
-  pg_data:
-  neo4j_data:
-```
