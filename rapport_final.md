@@ -509,7 +509,9 @@ Aucune donnee perdue ni dupliquee, 100% de coherence.
 
 #### Requete 1 -- Comptage des noeuds et relations
 
-Verifier l'integrite apres migration.
+**Justification** : Apres toute migration de donnees, la premiere etape est de verifier qu'aucune donnee n'a ete perdue. En comparant les comptages Neo4j avec ceux de PostgreSQL, on garantit une coherence a 100%. Dans un contexte reel, ce type de controle est systematique lors d'audits de qualite des donnees ou de certifications ISO 27001 (securite de l'information).
+
+**Cas pratique** : Le Ministere de l'Interieur doit certifier que les statistiques publiees sont completes. Si un departement ou un type d'infraction manque apres migration, les analyses en aval seraient faussees. Cette requete sert de test de non-regression.
 
 ```cypher
 MATCH (n)
@@ -523,9 +525,13 @@ RETURN type(r) AS relation, COUNT(r) AS nombre
 ORDER BY nombre DESC
 ```
 
+*Resultat tabulaire (pas de vue graphe) — voir screen.md pour la capture.*
+
 #### Requete 2 -- Visualisation du modele complet
 
-Voir tous les types de noeuds et relations sur un sous-graphe.
+**Justification** : Avant d'exploiter une base graphe, il faut verifier que le schema est conforme a la conception. Cette requete affiche un echantillon de tous les types de noeuds et relations en une seule vue. C'est l'equivalent d'un diagramme entite-relation, mais genere directement depuis les donnees reelles.
+
+**Cas pratique** : Lors de la presentation du projet aux analystes du Ministere, cette visualisation permet de valider que le modele correspond bien au domaine metier : un service se trouve dans un departement, appartient a un perimetre (PN ou GN), et enregistre des faits lies a des infractions. Si une relation manque ou est mal orientee, on le voit immediatement.
 
 ```cypher
 MATCH (s:Service)-[:SE_TROUVE]->(d:Departement)-[:APPARTIENT_A]->(r:Region),
@@ -535,9 +541,13 @@ RETURN s, d, r, p, e, i
 LIMIT 5
 ```
 
+![Visualisation du modele complet](nosql_migration/requetes_neo4j/requete_02_graph.svg)
+
 #### Requete 3 -- Top 10 des infractions les plus frequentes
 
-Identifier les infractions les plus courantes pour orienter la prevention.
+**Justification** : Connaitre les infractions les plus frequentes a l'echelle nationale est essentiel pour orienter les politiques de prevention et allouer les budgets. Le graphe permet ici d'agreger les donnees en traversant directement la relation `CONCERNE` sans jointure intermediaire.
+
+**Cas pratique** : Le Ministere publie chaque annee un bilan statistique de la delinquance. Cette requete produit directement le classement national des infractions. Par exemple, si les vols sans violence dominent largement, cela justifie des campagnes de prevention ciblees (video-protection, sensibilisation) plutot que des renforts d'effectifs sur le terrain.
 
 ```cypher
 MATCH (e:Enregistrement)-[:CONCERNE]->(i:Infraction)
@@ -546,9 +556,13 @@ ORDER BY total_faits DESC
 LIMIT 10
 ```
 
+*Resultat tabulaire (pas de vue graphe) — voir screen.md pour la capture.*
+
 #### Requete 4 -- Top 3 des crimes par departement
 
-Adapter les moyens locaux en fonction des infractions dominantes.
+**Justification** : Les realites de la criminalite varient fortement d'un departement a l'autre. Un departement rural n'a pas les memes problematiques qu'un departement urbain. Identifier les 3 infractions dominantes par departement permet d'adapter les moyens locaux de facon ciblee.
+
+**Cas pratique** : Les prefets utilisent ce type de classement pour rediger les plans departementaux de prevention de la delinquance (PDPD). Par exemple, si dans les Bouches-du-Rhone les vols avec violence dominent tandis que dans la Creuse ce sont les atteintes aux biens agricoles, les strategies deployees seront radicalement differentes. Cette requete fournit la base chiffree de ces decisions.
 
 ```cypher
 MATCH (s:Service)-[:SE_TROUVE]->(d:Departement),
@@ -560,18 +574,26 @@ UNWIND top3 AS t
 RETURN departement, t.infraction AS infraction, t.total AS total_faits
 ```
 
+*Resultat tabulaire (pas de vue graphe) — voir screen.md pour la capture.*
+
 #### Requete 5 -- Hierarchie regions / departements
 
-Visualiser le decoupage administratif.
+**Justification** : Le decoupage administratif francais (regions/departements) est la colonne vertebrale de toute analyse territoriale. Visualiser cette hierarchie sous forme de graphe permet de verifier que chaque departement est bien rattache a sa region et de reperer d'eventuelles anomalies (departement orphelin, mauvais rattachement).
+
+**Cas pratique** : Depuis la reforme territoriale de 2016 (passage de 22 a 13 regions metropolitaines), certains departements ont change de region. Cette vue permet de valider que les rattachements sont a jour. Elle sert aussi de support cartographique pour les reunions inter-regionales de securite, ou les directeurs zonaux ont besoin de voir quels departements relevent de leur competence.
 
 ```cypher
 MATCH (d:Departement)-[:APPARTIENT_A]->(r:Region)
 RETURN d, r
 ```
 
+![Hierarchie regions / departements](nosql_migration/requetes_neo4j/requete_05_graph.svg)
+
 #### Requete 6 -- Services d'une region (Ile-de-France)
 
-Analyser le maillage territorial d'une region.
+**Justification** : L'Ile-de-France concentre a elle seule pres de 20% de la population francaise et une part disproportionnee de la criminalite. Visualiser le maillage des services (commissariats, brigades) permet d'evaluer la couverture territoriale et d'identifier d'eventuelles zones blanches.
+
+**Cas pratique** : La Prefecture de Police de Paris et les prefectures de la petite couronne (92, 93, 94) coordonnent regulierement leurs effectifs lors d'evenements majeurs (manifestations, evenements sportifs, alertes terroristes). Cette vue graphe montre quels services sont disponibles dans quels departements, facilitant la planification des renforts inter-departementaux. Elle permet aussi de verifier que chaque commune est bien couverte par au moins un service.
 
 ```cypher
 MATCH (s:Service)-[:SE_TROUVE]->(d:Departement)-[:APPARTIENT_A]->(r:Region)
@@ -580,9 +602,13 @@ RETURN s, d, r
 LIMIT 50
 ```
 
+![Services d'Ile-de-France](nosql_migration/requetes_neo4j/requete_06_graph.svg)
+
 #### Requete 7 -- Repartition Police / Gendarmerie
 
-Voir les services d'un departement et leur perimetre.
+**Justification** : La France a un systeme dual de securite interieure : la Police Nationale couvre les zones urbaines (communes de plus de 20 000 habitants en general) et la Gendarmerie Nationale couvre les zones rurales et periurbaines. Comprendre cette repartition est essentiel pour analyser correctement les statistiques, car les methodes de comptage et les perimetres d'intervention different entre les deux forces.
+
+**Cas pratique** : Lors de la creation de la Police de Securite du Quotidien (PSQ), le Ministere a du identifier quels territoires relevaient de quelle force pour eviter les doublons de competence. A Paris, seule la Police Nationale intervient (via la Prefecture de Police), mais dans des departements mixtes comme le Val-d'Oise, les deux forces coexistent. Cette requete permet de visualiser immediatement cette repartition pour n'importe quel departement.
 
 ```cypher
 MATCH (s:Service)-[:SE_TROUVE]->(d:Departement),
@@ -591,27 +617,39 @@ WHERE d.nom_dept = 'Paris'
 RETURN s, d, p
 ```
 
+![Repartition PN/GN a Paris](nosql_migration/requetes_neo4j/requete_07_graph.svg)
+
 #### Requete 8 -- Adjacences d'un departement
 
-Identifier les departements voisins. C'est la que le graphe prend tout son sens.
+**Justification** : Les adjacences geographiques sont au coeur de l'interet du modele graphe. En SQL, trouver les voisins d'un departement necessite une jointure sur une table d'adjacence. En graphe, c'est une simple traversee de relation. Cette requete illustre concretement pourquoi le graphe est plus adapte aux questions spatiales.
+
+**Cas pratique** : Quand un departement connait un pic de cambriolages, les forces de l'ordre des departements voisins sont alertees car les malfaiteurs operent souvent sur plusieurs departements limitrophes. C'est le principe des "plans de recherche" inter-departementaux. Par exemple, une serie de braquages a Paris (75) declenchera une vigilance renforcee dans les Hauts-de-Seine (92), la Seine-Saint-Denis (93) et le Val-de-Marne (94). Cette requete fournit instantanement la liste des departements a alerter.
 
 ```cypher
 MATCH (d:Departement {code_dept: '75'})-[:EST_ADJACENT]-(voisin:Departement)
 RETURN d, voisin
 ```
 
+![Adjacences de Paris](nosql_migration/requetes_neo4j/requete_08_graph.svg)
+
 #### Requete 9 -- Carte complete des adjacences
 
-Visualiser tout le reseau de voisinage.
+**Justification** : La carte complete des adjacences forme une representation topologique du territoire francais. Chaque departement est un noeud, chaque frontiere partagee est une arete. Cette structure est la base de toute analyse spatiale avancee : detection de clusters, propagation de phenomenes, optimisation de tournees.
+
+**Cas pratique** : L'Office Central de Lutte contre la Delinquance Itinerante (OCLDI) traque les reseaux criminels qui se deplacent de departement en departement. La carte des adjacences permet de modeliser les corridors de deplacement possibles et d'identifier les departements "carrefours" (ceux qui ont le plus de voisins et donc le plus de routes de transit). Elle sert aussi a la Direction Generale de la Securite Civile pour planifier les renforts en cas de catastrophe naturelle touchant plusieurs departements contigus.
 
 ```cypher
 MATCH (a:Departement)-[:EST_ADJACENT]->(b:Departement)
 RETURN a, b
 ```
 
+![Carte complete des adjacences](nosql_migration/requetes_neo4j/requete_09_graph.svg)
+
 #### Requete 10 -- Plus court chemin entre deux departements
 
-Trouver le chemin geographique le plus court via les adjacences.
+**Justification** : Le calcul de plus court chemin est l'operation ou le graphe surpasse le plus nettement le relationnel. En SQL, il faut une CTE recursive d'une vingtaine de lignes. En Cypher, `shortestPath` le fait nativement en 3 lignes. Cette requete montre Paris (75) vers les Bouches-du-Rhone (13), soit un trajet nord-sud traversant plusieurs departements.
+
+**Cas pratique** : Lors du transferement de detenus entre etablissements penitentiaires, l'administration doit planifier les escortes en traversant le minimum de departements (chaque franchissement de limite departementale implique un changement de competence et une coordination supplementaire). De meme, lors de la traque d'un suspect en fuite, les enqueteurs utilisent ce type d'analyse pour anticiper les itineraires probables et positionner des barrages aux bons endroits. Le chemin Paris-Marseille traverse environ 7 departements, ce qui donne autant de points de coordination.
 
 ```cypher
 MATCH (a:Departement {code_dept: '75'}),
@@ -620,9 +658,13 @@ MATCH (a:Departement {code_dept: '75'}),
 RETURN path
 ```
 
+![Plus court chemin Paris-Marseille](nosql_migration/requetes_neo4j/requete_10_graph.svg)
+
 #### Requete 11 -- Detail des enregistrements d'un service
 
-Quelles infractions un service a-t-il enregistrees ?
+**Justification** : Descendre au niveau d'un service individuel permet d'auditer ses enregistrements. On voit quelles infractions il a traitees, en quelle quantite, et sur quelles annees. C'est le niveau de granularite le plus fin du graphe.
+
+**Cas pratique** : Lors des inspections generales (IGPN pour la police, IGGN pour la gendarmerie), les inspecteurs examinent les statistiques d'un commissariat ou d'une brigade specifique pour detecter des anomalies : un service qui n'enregistre aucun vol alors que ses voisins en comptent des centaines, ou inversement un service avec des chiffres anormalement eleves qui pourraient indiquer un probleme de perimetre. Cette requete permet de "zoomer" instantanement sur un service et de voir l'ensemble de son activite sous forme de graphe.
 
 ```cypher
 MATCH (s:Service)-[:ENREGISTRE]->(e:Enregistrement)-[:CONCERNE]->(i:Infraction)
@@ -630,6 +672,8 @@ WHERE s.code_service = '1'
 RETURN s, e, i
 LIMIT 20
 ```
+
+![Detail des enregistrements d'un service](nosql_migration/requetes_neo4j/requete_11_graph.svg)
 
 ### 5.3 Comparaison SQL vs Cypher
 
